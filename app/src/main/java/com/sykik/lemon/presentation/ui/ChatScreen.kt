@@ -53,11 +53,15 @@ fun ChatScreen(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    // Perplexity style uses a very clean, often monochromatic background.
-    val backgroundColor = MaterialTheme.colorScheme.background
+    // Translucent layers allowing animated background to show through
+    val topBarColor = MaterialTheme.colorScheme.background.copy(alpha = 0.5f)
+    val bottomAreaColor = MaterialTheme.colorScheme.background.copy(alpha = 0.6f)
     val surfaceColor = MaterialTheme.colorScheme.surface
 
-    Scaffold(
+    Box(modifier = Modifier.fillMaxSize()) {
+        AnimatedStarfield(isDarkMode = state.isDarkMode)
+
+        Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 navigationIcon = {
@@ -129,11 +133,11 @@ fun ChatScreen(
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = backgroundColor
+                    containerColor = topBarColor
                 )
             )
         },
-        containerColor = backgroundColor
+        containerColor = Color.Transparent
     ) { padding ->
         Box(
             modifier = Modifier
@@ -160,7 +164,7 @@ fun ChatScreen(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(
-                        color = backgroundColor.copy(alpha = 0.9f)
+                        color = bottomAreaColor
                     )
                     .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
@@ -170,6 +174,7 @@ fun ChatScreen(
                 )
             }
         }
+    }
     }
 }
 
