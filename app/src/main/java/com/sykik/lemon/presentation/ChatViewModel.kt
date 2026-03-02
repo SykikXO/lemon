@@ -27,7 +27,8 @@ data class ChatState(
     val isModelDownloadPopupVisible: Boolean = false,
     val isDownloadingModel: Boolean = false,
     val downloadStatusText: String = "",
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isDarkMode: Boolean = true
 )
 
 class ChatViewModel(
@@ -128,6 +129,12 @@ class ChatViewModel(
     fun toggleModelDownloadPopup() {
         _uiState.value = _uiState.value.copy(
             isModelDownloadPopupVisible = !_uiState.value.isModelDownloadPopupVisible
+        )
+    }
+
+    fun toggleDarkMode() {
+        _uiState.value = _uiState.value.copy(
+            isDarkMode = !_uiState.value.isDarkMode
         )
     }
 

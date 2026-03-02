@@ -1,21 +1,41 @@
 package com.sykik.lemon.presentation.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Subject
+import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Adjust
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sykik.lemon.domain.model.ChatMessage
 import com.sykik.lemon.domain.model.LlmModel
+import com.sykik.lemon.domain.model.Source
 import com.sykik.lemon.presentation.ChatState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,139 +44,459 @@ fun ChatScreen(
     state: ChatState,
     onSendMessage: (String) -> Unit,
     onModelSelected: (LlmModel) -> Unit,
-    onManageModelsClicked: () -> Unit
+    onManageModelsClicked: () -> Unit,
+    onThemeToggleClicked: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+
+    // Perplexity style uses a very clean, often monochromatic background.
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val surfaceColor = MaterialTheme.colorScheme.surface
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Lemon Chat") },
+                title = { 
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = "Logo",
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Perplexity Clone",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                },
                 actions = {
-                    Box {
-                        TextButton(onClick = { expanded = true }) {
-                            Text(state.selectedModel?.name ?: "Select Model")
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Switch Model")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onThemeToggleClicked) {
+                            Icon(
+                                imageVector = if (state.isDarkMode) Icons.Default.WbSunny else Icons.Default.NightsStay,
+                                contentDescription = "Toggle Theme",
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
                         }
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            state.availableModels.forEach { model ->
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.clickable { expanded = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        state.selectedModel?.name ?: "Select Model",
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Switch Model", modifier = Modifier.size(16.dp))
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                state.availableModels.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = { Text(model.name) },
+                                        onClick = {
+                                            onModelSelected(model)
+                                            expanded = false
+                                        }
+                                    )
+                                }
+                                HorizontalDivider()
                                 DropdownMenuItem(
-                                    text = { Text(model.name) },
+                                    text = { Text("Manage Models...") },
                                     onClick = {
-                                        onModelSelected(model)
+                                        onManageModelsClicked()
                                         expanded = false
                                     }
                                 )
                             }
-                            Divider()
-                            DropdownMenuItem(
-                                text = { Text("Manage Models...") },
-                                onClick = {
-                                    onManageModelsClicked()
-                                    expanded = false
-                                }
-                            )
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = backgroundColor
+                )
             )
-        }
+        },
+        containerColor = backgroundColor
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
             LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 140.dp),
+                verticalArrangement = Arrangement.spacedBy(40.dp)
             ) {
                 items(state.messages) { message ->
-                    ChatBubble(message)
+                    if (message.isFromUser) {
+                        UserQuerySection(text = message.text)
+                    } else {
+                        AssistantAnswerSection(message = message)
+                    }
                 }
             }
 
-            ChatInputArea(
-                isGenerating = state.isGenerating,
-                onSendMessage = onSendMessage
-            )
+            // Floating bottom input area
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        color = backgroundColor.copy(alpha = 0.9f)
+                    )
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
+            ) {
+                PerplexityInputArea(
+                    isGenerating = state.isGenerating,
+                    onSendMessage = onSendMessage
+                )
+            }
         }
     }
 }
 
 @Composable
-fun ChatBubble(message: ChatMessage) {
-    val alignment = if (message.isFromUser) Alignment.End else Alignment.Start
-    val color = if (message.isFromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+fun UserQuerySection(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.headlineLarge.copy(
+            fontWeight = FontWeight.Medium,
+            fontSize = 32.sp,
+            lineHeight = 40.sp,
+            letterSpacing = (-0.5).sp
+        ),
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        contentAlignment = if (message.isFromUser) Alignment.CenterEnd else Alignment.CenterStart
+@Composable
+fun AssistantAnswerSection(message: ChatMessage) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = color,
-            modifier = Modifier.widthIn(max = 280.dp)
-        ) {
-            Text(
-                text = message.text,
-                modifier = Modifier.padding(12.dp),
-                color = MaterialTheme.colorScheme.onSurface
-            )
+        if (message.sources.isNotEmpty()) {
+            SourcesRow(sources = message.sources)
+        }
+
+        AnswerBlock(text = message.text)
+
+        if (message.relatedQuestions.isNotEmpty()) {
+            RelatedQuestionsList(questions = message.relatedQuestions)
         }
     }
 }
 
 @Composable
-fun ChatInputArea(
+fun SourcesRow(sources: List<Source>) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.MenuBook,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "Sources",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+        
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = 16.dp)
+        ) {
+            itemsIndexed(sources) { index, source ->
+                SourceCard(index = index + 1, source = source)
+            }
+        }
+    }
+}
+
+@Composable
+fun SourceCard(index: Int, source: Source) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = Modifier
+            .width(170.dp)
+            .height(80.dp)
+            .clickable { /* Omitted for brevity */ }
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = source.title,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 18.sp
+                    ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                // Number badge
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = index.toString(),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(14.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = source.domain,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AnswerBlock(text: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.Subject, // Using a list/text icon roughly similar to the perplexity spark
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "Answer",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+        
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                lineHeight = 28.sp,
+                fontSize = 17.sp,
+                letterSpacing = 0.1.sp
+            ),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+    }
+}
+
+@Composable
+fun RelatedQuestionsList(questions: List<String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.FormatListBulleted,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "Related",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            questions.forEach { question ->
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Transparent,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { /* Handle tap */ }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = question,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 16.sp
+                            )
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Expand",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PerplexityInputArea(
     isGenerating: Boolean,
     onSendMessage: (String) -> Unit
 ) {
     var text by remember { mutableStateOf("") }
 
     Surface(
-        tonalElevation = 2.dp,
+        shape = RoundedCornerShape(24.dp),
+        shadowElevation = 0.dp,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), // Light offset color
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier
-                .padding(8.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Column(modifier = Modifier.padding(12.dp)) {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask anything...") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                placeholder = { 
+                    Text(
+                        "Ask anything...", 
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ) 
+                },
                 enabled = !isGenerating,
-                maxLines = 4
+                maxLines = 5,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent
+                )
             )
             
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
-            IconButton(
-                onClick = {
-                    if (text.isNotBlank()) {
-                        onSendMessage(text)
-                        text = ""
-                    }
-                },
-                enabled = !isGenerating && text.isNotBlank()
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send Message",
-                    tint = if (!isGenerating && text.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Focus feature
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { /* Focus feature */ }) {
+                        Icon(
+                            imageVector = Icons.Default.Adjust,
+                            contentDescription = "Focus",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "Focus", 
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        )
+                    }
+
+                    // Attach feature
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { /* Attach feature */ }) {
+                        Icon(
+                            imageVector = Icons.Default.AttachFile,
+                            contentDescription = "Attach",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "Attach", 
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        )
+                    }
+                }
+
+                // Send Button
+                Surface(
+                    shape = CircleShape,
+                    color = if (!isGenerating && text.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable(enabled = !isGenerating && text.isNotBlank()) {
+                            onSendMessage(text)
+                            text = ""
+                        }
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Send Message",
+                            tint = if (!isGenerating && text.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
         }
     }
