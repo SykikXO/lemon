@@ -1,0 +1,59 @@
+curl -s "https://ollama.com/library" | grep -o 'href="/library/[^"]*' | cut -d'/' -f3 -> get ollama models names
+curl -s "https://registry.ollama.ai/v2/library/{MODEL_NAME}/manifests/latest" | jq '.layers[0].digest' -> get digest enter MODEL_NAME from list above.
+
+
+@Composable
+fun ModelDownloaderScreen() {
+    var userInput by remember { mutableStateOf("codeup:latest") }
+    var status by remember { mutableStateOf("") }
+    
+    Column {
+        OutlinedTextField(
+            value = userInput,
+            onValueChange = { userInput = it },
+            label = { Text("Model name (e.g. llama3.2:1b, codeup:latest)") },
+            trailingIcon = { 
+                Button(onClick = { downloadModel(userInput) }) {
+                    Text("PULL")
+                }
+            }
+        )
+        
+        Text(status)
+    }
+}
+
+private fun downloadModel(input: String) {
+    val (name, tag) = input.split(":").let { it[0] to it.getOrNull(1) ?: "latest" }
+    
+    lifecycleScope.launch {
+        status = "Resolving $name:$tag..."
+        val file = smartDownloader.downloadByName(name, tag)
+        status = "✅ Loaded ${file.name} (${file.length() / 1e6}MB)"
+        llamaHelper.load(file.absolutePath)
+    }
+}
+
+private suspend fun resolveDigest(modelName: String, tag: String): String {
+    val commonTags = listOf(tag, "latest", "1b", "3b", "7b", "mini")
+    
+    for (t in commonTags) {
+        try {
+            val url = "https://registry.ollama.ai/v2/library/$modelName/manifests/$t"
+            val response = client.newCall(url).execute()
+            if (response.isSuccessful) {
+                return JSONObject(response.body!!.string())
+                    .getJSONArray("layers").getJSONObject(0)
+                    .getString("digest").removePrefix("sha256:")
+            }
+        } catch (e: Exception) { /* try next tag */ }
+    }
+    throw Exception("❌ $modelName not found. Try: llama3.2:1b, codeup:latest")
+}
+
+
+User gets list: "llama3.2:1b, codeup:latest" blah blah to select and download." 
+App: "🔄 Resolving gemma2:2b..."
+App: "⬇️ Downloading 940MB in 16 parts... 23%"
+App: "✅ gemma2-2b.gguf ready! Loading in llama.cpp..."
+Chat screen opens → DONE

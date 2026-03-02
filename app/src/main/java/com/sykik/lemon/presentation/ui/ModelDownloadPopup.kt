@@ -2,15 +2,20 @@ package com.sykik.lemon.presentation.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 
 @Composable
 fun ModelDownloadPopup(
+    isDownloading: Boolean,
+    statusText: String,
+    onDownloadModel: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var userInput by remember { mutableStateOf("") }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = MaterialTheme.shapes.medium,
@@ -22,24 +27,30 @@ fun ModelDownloadPopup(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Download Models",
+                    text = "Pull Ollama Model",
                     style = MaterialTheme.typography.titleLarge
                 )
                 
-                Text("This logic will connect to Ollama Hub or direct .gguf links from HuggingFace to download local models.")
+                Text("Enter a model name to download dynamically from Ollama Registry.")
                 
-                // Placeholder for future models
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("llama-2-7b-chat.gguf", style = MaterialTheme.typography.bodyLarge)
-                        Text("Size: 4.2 GB", style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { /* TODO implement download logic */ }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Download")
+                OutlinedTextField(
+                    value = userInput,
+                    onValueChange = { userInput = it },
+                    label = { Text("e.g. llama3.2:1b, codeup:latest") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isDownloading,
+                    trailingIcon = { 
+                        Button(
+                            onClick = { if (userInput.isNotBlank()) onDownloadModel(userInput) },
+                            enabled = !isDownloading && userInput.isNotBlank()
+                        ) {
+                            Text(if (isDownloading) "..." else "PULL")
                         }
                     }
+                )
+
+                if (statusText.isNotEmpty()) {
+                    Text(text = statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
 
                 Row(

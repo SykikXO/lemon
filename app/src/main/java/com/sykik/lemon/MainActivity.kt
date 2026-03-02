@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.sykik.lemon.data.engine.MockLlmEngine
+import com.sykik.lemon.data.engine.LlamaCppEngineImpl
 import com.sykik.lemon.presentation.ChatViewModel
 import com.sykik.lemon.presentation.ui.ChatScreen
 import com.sykik.lemon.presentation.ui.ModelDownloadPopup
@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
                     // Temporary factory until Dependency Injection (like Hilt) is added
                     val factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return ChatViewModel(MockLlmEngine()) as T
+                            return ChatViewModel(LlamaCppEngineImpl(this@MainActivity.applicationContext)) as T
                         }
                     }
                     
@@ -47,6 +47,12 @@ class MainActivity : ComponentActivity() {
 
                     if (state.isModelDownloadPopupVisible) {
                         ModelDownloadPopup(
+                            isDownloading = state.isDownloadingModel,
+                            statusText = state.downloadStatusText,
+                            onDownloadModel = { modelName ->
+                                val outputDir = getExternalFilesDir(null)?.absolutePath ?: filesDir.absolutePath
+                                viewModel.downloadModel(modelName, outputDir)
+                            },
                             onDismiss = viewModel::toggleModelDownloadPopup
                         )
                     }

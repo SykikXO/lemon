@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.sykik.lemon.domain.engine.LlmEngine
 import com.sykik.lemon.domain.model.ChatMessage
 import com.sykik.lemon.domain.model.LlmModel
+import com.sykik.lemon.data.engine.OllamaDownloader
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +21,8 @@ data class ChatState(
     ),
     val selectedModel: LlmModel? = null,
     val isModelDownloadPopupVisible: Boolean = false,
+    val isDownloadingModel: Boolean = false,
+    val downloadStatusText: String = "",
     val errorMessage: String? = null
 )
 
@@ -29,10 +33,64 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatState())
     val uiState: StateFlow<ChatState> = _uiState.asStateFlow()
 
+    private val downloader = OllamaDownloader()
+
     init {
         // Auto-select first available downloaded model
         _uiState.value.availableModels.firstOrNull { it.isDownloaded }?.let { 
             selectModel(it)
+        }
+    }
+
+    fun downloadModel(input: String, outputDir: String) {
+        if (_uiState.value.isDownloadingModel) return
+
+        val parts = input.split(":")
+        val name = parts[0]
+        val tag = parts.getOrNull(1) ?: "latest"
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.value = _uiState.value.copy(
+                isDownloadingModel = true,
+                errorMessage = null,
+                downloadStatusText = "Resolving digest for $name:$tag..."
+            )
+            
+            try {
+                // 1. Resolve Digest from Ollama registry (using user parallel implementation)
+                val digest = downloader.resolveDigest(name, tag)
+
+                _uiState.value = _uiState.value.copy(
+                    downloadStatusText = "Downloading $name:$tag via parallel OkHttp chunks..."
+                )
+
+                // 2. Download Model
+                val filename = "${name.replace("/", "_")}-$tag.gguf"
+                val file = downloader.download(name, digest, outputDir, filename)
+                
+                // Add downloaded model to state
+                val newModel = LlmModel(
+                    id = "$name:$tag",
+                    name = "$name ($tag)",
+                    absolutePath = file.absolutePath,
+                    isDownloaded = true
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    availableModels = _uiState.value.availableModels + newModel,
+                    isDownloadingModel = false,
+                    isModelDownloadPopupVisible = false,
+                    downloadStatusText = "✅ Loaded ${file.name} (${file.length() / 1_000_000}MB)"
+                )
+                
+                selectModel(newModel)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Download Failed: ${e.message}",
+                    isDownloadingModel = false,
+                    downloadStatusText = "Error: ${e.message}"
+                )
+            }
         }
     }
 

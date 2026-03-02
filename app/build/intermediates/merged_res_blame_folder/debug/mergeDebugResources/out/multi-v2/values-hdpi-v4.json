@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.sykik.lemon.app-mergeDebugResources-62:/values-hdpi-v4/values-hdpi-v4.xml",
+            "map": [
+                {
+                    "source": "/home/sykik/.gradle/caches/9.3.1/transforms/20fc206827fb1fe7c2ab4d2d1317a95f/transformed/appcompat-1.7.1/res/values-hdpi-v4/values-hdpi-v4.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "6",
+                        "endColumns": "13",
+                        "endOffsets": "327"
+                    }
+                }
+            ]
+        }
+    ]
+}

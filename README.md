@@ -1,11 +1,11 @@
 # Lemon - Android Kotlin App
 
-A baseline Android project designed to easily get up and running. 
+A baseline Android project designed to easily get up and running, running a local LLM inference engine using Jetpack Compose.
 
 ## Requirements
 - Android Studio (Jellyfish 2023.3.1 or newer recommended for AGP 8.7+)
 - JDK 17 or higher
-- Android SDK API Level 34
+- Android SDK API Level 35
 
 ## Local Setup
 
@@ -42,8 +42,8 @@ This project is configured to work seamlessly with the Antigravity AI assistant.
 **Getting Started:**
 1. Open the project in your IDE where Antigravity is active.
 2. Ensure you have the Android SDK installed and configured in `local.properties` (`sdk.dir=/path/to/sdk`).
-3. You can ask Antigravity to create new Android components (Activities, Fragments, ViewModels) and it will generate the necessary boilerplate and update the `AndroidManifest.xml` respectively.
-4. If you need to add new UI layouts, ask Antigravity to generate or modify the `res/layout` XML files.
+3. You can ask Antigravity to create new Android components (Activities, Jetpack Compose UI Elements, ViewModels) and it will generate the necessary boilerplate and update the `AndroidManifest.xml` respectively.
+4. If you need to add new UI layouts, ask Antigravity to generate or modify Jetpack Compose components instead of XML layout files.
 
 **Tips:**
 - To verify builds during an Antigravity session, ask it to run `./gradlew assembleDebug`.
