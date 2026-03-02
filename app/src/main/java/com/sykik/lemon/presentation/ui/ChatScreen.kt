@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
@@ -23,6 +26,10 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.WbCloudy
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Flight
+import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -157,6 +164,15 @@ fun ChatScreen(
                     }
                 }
             }
+            
+            // Empty State: Show suggested popular prompts
+            if (state.messages.isEmpty() && !state.isGenerating) {
+                SuggestedPromptsSection(
+                    isDarkMode = state.isDarkMode,
+                    onPromptClick = onSendMessage,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 80.dp)
+                )
+            }
 
             // Floating bottom input area
             Box(
@@ -175,6 +191,68 @@ fun ChatScreen(
             }
         }
     }
+    }
+}
+
+@Composable
+fun SuggestedPromptsSection(isDarkMode: Boolean, onPromptClick: (String) -> Unit, modifier: Modifier = Modifier) {
+    val prompts = listOf(
+        Pair(Icons.Outlined.WbCloudy, "What's the weather like in Tokyo right now?"),
+        Pair(Icons.Outlined.Code, "Write a Python script to scrape a website"),
+        Pair(Icons.Outlined.Flight, "Plan a 5-day itinerary for a trip to Paris"),
+        Pair(Icons.Outlined.Restaurant, "Give me a recipe for authentic carbonara")
+    )
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        Text(
+            text = "Where knowledge begins",
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.Medium,
+                letterSpacing = (-0.5).sp
+            ),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+
+        LazyVerticalStaggeredGrid(
+            columns = StaggeredGridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalItemSpacing = 12.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(prompts) { (icon, text) ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .clickable { onPromptClick(text) }
+                        .fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
