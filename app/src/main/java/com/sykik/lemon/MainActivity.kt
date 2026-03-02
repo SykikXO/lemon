@@ -31,7 +31,8 @@ class MainActivity : ComponentActivity() {
                     // Temporary factory until Dependency Injection (like Hilt) is added
                     val factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return ChatViewModel(LlamaCppEngineImpl(this@MainActivity.applicationContext)) as T
+                            val modelDir = getExternalFilesDir(null)?.absolutePath ?: filesDir.absolutePath
+                            return ChatViewModel(LlamaCppEngineImpl(this@MainActivity.applicationContext), modelDir) as T
                         }
                     }
                     
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity() {
                         state = state,
                         onSendMessage = viewModel::sendMessage,
                         onModelSelected = viewModel::selectModel,
+                        onDeleteModel = viewModel::deleteModel,
                         onManageModelsClicked = viewModel::toggleModelDownloadPopup
                     )
 

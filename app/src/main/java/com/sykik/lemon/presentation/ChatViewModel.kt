@@ -31,7 +31,8 @@ data class ChatState(
 )
 
 class ChatViewModel(
-    private val llmEngine: LlmEngine
+    private val llmEngine: LlmEngine,
+    private val modelDir: String
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatState())
@@ -41,8 +42,11 @@ class ChatViewModel(
     private val modelLister = OllamaModelLister()
 
     init {
-        // Auto-select first available downloaded model
-        _uiState.value.availableModels.firstOrNull { it.isDownloaded }?.let { 
+        // Scan for existing downloaded .gguf files
+        scanForExistingModels()
+
+        // Auto-select first available downloaded model that has a real path
+        _uiState.value.availableModels.firstOrNull { it.isDownloaded && !it.absolutePath.isNullOrEmpty() }?.let { 
             selectModel(it)
         }
         
@@ -61,6 +65,33 @@ class ChatViewModel(
             } catch (e: Exception) {
                 // Ignore missing models fallback
             }
+        }
+    }
+
+    private fun scanForExistingModels() {
+        val dir = java.io.File(modelDir)
+        if (!dir.exists() || !dir.isDirectory) return
+
+        val ggufFiles = dir.listFiles { file ->
+            file.isFile && file.name.endsWith(".gguf") && file.length() > 0
+        } ?: return
+
+        val existingModels = ggufFiles.map { file ->
+            val displayName = file.nameWithoutExtension
+                .replace("-", " ")
+                .replace("_", "/")
+            LlmModel(
+                id = file.name,
+                name = displayName,
+                absolutePath = file.absolutePath,
+                isDownloaded = true
+            )
+        }
+
+        if (existingModels.isNotEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                availableModels = existingModels
+            )
         }
     }
 
@@ -119,6 +150,10 @@ class ChatViewModel(
     fun selectModel(model: LlmModel) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(selectedModel = model, errorMessage = null)
+            if (model.absolutePath.isNullOrEmpty()) {
+                android.util.Log.w("LlamaEngine", "selectModel skipped: no absolutePath for ${model.name}")
+                return@launch
+            }
             llmEngine.initialize(model).onFailure { error ->
                 _uiState.value = _uiState.value.copy(errorMessage = "Failed to load model: ${error.message}")
             }
@@ -129,6 +164,33 @@ class ChatViewModel(
         _uiState.value = _uiState.value.copy(
             isModelDownloadPopupVisible = !_uiState.value.isModelDownloadPopupVisible
         )
+    }
+
+    fun deleteModel(model: LlmModel) {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Close engine if this model is currently loaded
+            if (_uiState.value.selectedModel?.id == model.id) {
+                try { llmEngine.close() } catch (_: Exception) {}
+            }
+
+            // Delete the file
+            model.absolutePath?.let { path ->
+                val file = java.io.File(path)
+                if (file.exists()) file.delete()
+                // Also delete any partial file
+                val partial = java.io.File("$path-partial")
+                if (partial.exists()) partial.delete()
+            }
+
+            // Update UI state
+            val updatedModels = _uiState.value.availableModels.filter { it.id != model.id }
+            val newSelected = if (_uiState.value.selectedModel?.id == model.id) null else _uiState.value.selectedModel
+            _uiState.value = _uiState.value.copy(
+                availableModels = updatedModels,
+                selectedModel = newSelected,
+                errorMessage = null
+            )
+        }
     }
 
     fun sendMessage(text: String) {

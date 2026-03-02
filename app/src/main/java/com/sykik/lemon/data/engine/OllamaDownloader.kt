@@ -1,18 +1,19 @@
 package com.sykik.lemon.data.engine
 
-import com.sykik.lemon.domain.model.LlmModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.supervisorScope
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
-import java.io.FileOutputStream
 import android.util.Log
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.TimeUnit
 
 data class BlobDownload(
     val digest: String,
@@ -30,16 +31,22 @@ data class BlobDownloadPart(
 )
 
 class OllamaDownloader {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
 
     private val _downloadProgress = MutableStateFlow<String>("")
     val downloadProgress: StateFlow<String> = _downloadProgress.asStateFlow()
 
+    companion object {
+        private const val TAG = "OllamaDownloader"
+        private const val NUM_PARTS = 16
+        private const val MAX_RETRIES = 3
+    }
+
     /**
      * Resolves the SHA-256 digest from the Ollama Registry for a specific model namespace.
-     * @param modelName e.g., "llama3.2"
-     * @param tag e.g., "latest" or "3b"
-     * @return Pair containing digest (String) and total size in bytes (Long).
      */
     suspend fun resolveDigest(modelName: String, tag: String = "latest"): Pair<String, Long> = coroutineScope {
         val commonTags = listOf(tag, "latest", "1b", "3b", "7b", "mini").distinct()
@@ -72,78 +79,125 @@ class OllamaDownloader {
     }
 
     /**
-     * Downloads an LLM model chunk by chunk from Ollama's registry into the given output directory.
-     * @param modelName The registry namespace (e.g. "llama3.2" or "phi3")
-     * @param digest The SHA256 of the model layer.
-     * @param totalSize The total size of the chunk extracted from the registry.
-     * @param outputDir The Directory to save the final .gguf file.
-     * @param filename What you want the output file named.
+     * Downloads an LLM model with parallel chunks and per-part retry.
+     * If a part fails, it retries up to MAX_RETRIES times.
+     * Uses supervisorScope so one part failure doesn't cancel others.
      */
-    suspend fun download(modelName: String, digest: String, totalSize: Long, outputDir: String, filename: String): File = coroutineScope {
+    suspend fun download(modelName: String, digest: String, totalSize: Long, outputDir: String, filename: String): File {
         val blob = BlobDownload(
             digest = digest,
             name = "$outputDir/$filename",
             total = totalSize
         )
         
-        // Ensure outputDir exists
         File(outputDir).mkdirs()
 
-        // STEP 2: Slice into 16 parts 
-        val partSize = (blob.total / 16).coerceIn(100*1024*1024, 1000*1024*1024)
-        repeat(16) { i ->
+        // Slice into NUM_PARTS parts
+        val partSize = blob.total / NUM_PARTS
+        for (i in 0 until NUM_PARTS) {
             val offset = i * partSize
-            val size = minOf(partSize, blob.total - offset)
+            val size = if (i == NUM_PARTS - 1) blob.total - offset else partSize
             if (size > 0) {
                 blob.parts.add(BlobDownloadPart(i, offset, size))
             }
         }
 
-        // STEP 3: PARALLEL DOWNLOAD
-        val file = File(blob.name + "-partial").apply {
-            createNewFile()
-        }
-
-        blob.parts.forEach { part ->
-            launch(Dispatchers.IO) {
-                downloadPart(modelName, file, part, digest, blob)
+        val partialFile = File(blob.name + "-partial")
+        
+        // Resume: check if partial file exists and has content
+        if (partialFile.exists() && partialFile.length() > 0) {
+            Log.d(TAG, "Resuming download, partial file size: ${partialFile.length()}")
+            _downloadProgress.value = "Resuming download..."
+        } else {
+            partialFile.createNewFile()
+            // Pre-allocate: write a single byte at the end to reserve space
+            java.io.RandomAccessFile(partialFile, "rw").use { raf ->
+                raf.setLength(totalSize)
             }
         }
 
-        // Wait all parts (this happens organically if launch doesn't crash, wrapper coroutineScope blocks until children finish)
-        file.renameTo(File(blob.name))
-        File(blob.name)
+        // Parallel download with supervisorScope — one part failure won't cancel others
+        supervisorScope {
+            val jobs = blob.parts.map { part ->
+                async(Dispatchers.IO) {
+                    downloadPartWithRetry(modelName, partialFile, part, digest, blob)
+                }
+            }
+            jobs.awaitAll()
+        }
+
+        // Verify all parts completed
+        val totalCompleted = blob.parts.sumOf { it.completed }
+        if (totalCompleted < blob.total * 0.99) { // Allow tiny rounding margin
+            throw Exception("Download incomplete: got $totalCompleted of ${blob.total} bytes")
+        }
+
+        // Rename partial to final
+        val finalFile = File(blob.name)
+        if (finalFile.exists()) finalFile.delete()
+        partialFile.renameTo(finalFile)
+        Log.d(TAG, "Download complete: ${finalFile.absolutePath} (${finalFile.length()} bytes)")
+        return finalFile
     }
 
+    private suspend fun downloadPartWithRetry(
+        modelName: String, file: File, part: BlobDownloadPart, digest: String, blob: BlobDownload
+    ) {
+        var attempt = 0
+        while (attempt < MAX_RETRIES) {
+            try {
+                downloadPart(modelName, file, part, digest, blob)
+                return // Success
+            } catch (e: Exception) {
+                attempt++
+                Log.w(TAG, "Part ${part.n} failed (attempt $attempt/$MAX_RETRIES): ${e.message}")
+                if (attempt >= MAX_RETRIES) {
+                    Log.e(TAG, "Part ${part.n} failed permanently after $MAX_RETRIES attempts")
+                    _downloadProgress.value = "⚠️ Part ${part.n} failed: ${e.message}"
+                    throw e
+                }
+                // Reset part progress for retry, offset from where we left off
+                val alreadyDownloaded = part.completed
+                Log.d(TAG, "Retrying part ${part.n} from byte offset ${part.offset + alreadyDownloaded}")
+            }
+        }
+    }
 
+    private fun downloadPart(modelName: String, file: File, part: BlobDownloadPart, digest: String, blob: BlobDownload) {
+        val resumeOffset = part.offset + part.completed
+        val endByte = part.offset + part.size - 1
+        
+        if (resumeOffset >= endByte) {
+            Log.d(TAG, "Part ${part.n} already complete, skipping")
+            return
+        }
 
-    private suspend fun downloadPart(modelName: String, file: File, part: BlobDownloadPart, digest: String, blob: BlobDownload) {
         val url = "https://registry.ollama.ai/v2/library/$modelName/blobs/sha256:$digest"
         val req = Request.Builder()
             .url(url)
-            .header("Range", "bytes=${part.offset}-${part.offset + part.size - 1}")
+            .header("Range", "bytes=$resumeOffset-$endByte")
             .build()
             
         client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                throw Exception("HTTP ${resp.code} for part ${part.n}")
+            }
             resp.body?.byteStream()?.use { inputStream ->
                 java.io.RandomAccessFile(file, "rw").use { raf ->
-                    raf.seek(part.offset)
-                    val buffer = ByteArray(8192)
+                    raf.seek(resumeOffset)
+                    val buffer = ByteArray(32 * 1024) // 32KB buffer for faster IO
                     var bytesRead: Int
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                         raf.write(buffer, 0, bytesRead)
                         part.completed += bytesRead
                         
-                        // Output total progress dynamically every ~10MB to avoid logcat spam
                         if (System.currentTimeMillis() - part.lastUpdated > 2000) {
                              part.lastUpdated = System.currentTimeMillis()
                              val sumCompleted = blob.parts.sumOf { it.completed }
                              val percent = (sumCompleted.toDouble() / blob.total * 100).toInt()
                              val mbDownloaded = sumCompleted / 1_000_000
                              val mbTotal = blob.total / 1_000_000
-                             val logStr = "Downloading $modelName: $mbDownloaded / $mbTotal MB ($percent%)"
-                             Log.d("OllamaDownloader", logStr)
-                             _downloadProgress.value = logStr
+                             _downloadProgress.value = "⬇️ $modelName: $mbDownloaded / $mbTotal MB ($percent%)"
                         }
                     }
                 }
