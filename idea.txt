@@ -1,0 +1,1 @@
+an kotlin app to run llm on phone (utilizing ollama maybe?)
