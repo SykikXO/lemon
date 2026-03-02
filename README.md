@@ -35,3 +35,16 @@ A baseline Android project designed to easily get up and running.
 
 ## Contributing
 When contributing, ensure you format code based on Kotlin official style guide. Ensure your branch passes the standard `./gradlew assembleDebug` check.
+
+## Using with Antigravity
+This project is configured to work seamlessly with the Antigravity AI assistant.
+
+**Getting Started:**
+1. Open the project in your IDE where Antigravity is active.
+2. Ensure you have the Android SDK installed and configured in `local.properties` (`sdk.dir=/path/to/sdk`).
+3. You can ask Antigravity to create new Android components (Activities, Fragments, ViewModels) and it will generate the necessary boilerplate and update the `AndroidManifest.xml` respectively.
+4. If you need to add new UI layouts, ask Antigravity to generate or modify the `res/layout` XML files.
+
+**Tips:**
+- To verify builds during an Antigravity session, ask it to run `./gradlew assembleDebug`.
+- You can ask Antigravity to explain the current Android project structure if you are new to the codebase.
