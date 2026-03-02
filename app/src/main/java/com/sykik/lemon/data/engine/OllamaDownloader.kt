@@ -9,6 +9,10 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 data class BlobDownload(
     val digest: String,
@@ -28,12 +32,16 @@ data class BlobDownloadPart(
 class OllamaDownloader {
     private val client = OkHttpClient()
 
+    private val _downloadProgress = MutableStateFlow<String>("")
+    val downloadProgress: StateFlow<String> = _downloadProgress.asStateFlow()
+
     /**
      * Resolves the SHA-256 digest from the Ollama Registry for a specific model namespace.
      * @param modelName e.g., "llama3.2"
      * @param tag e.g., "latest" or "3b"
+     * @return Pair containing digest (String) and total size in bytes (Long).
      */
-    suspend fun resolveDigest(modelName: String, tag: String = "latest"): String = coroutineScope {
+    suspend fun resolveDigest(modelName: String, tag: String = "latest"): Pair<String, Long> = coroutineScope {
         val commonTags = listOf(tag, "latest", "1b", "3b", "7b", "mini").distinct()
         
         for (t in commonTags) {
@@ -47,10 +55,13 @@ class OllamaDownloader {
                 
                 if (responseString != null) {
                     val json = JSONObject(responseString)
-                    return@coroutineScope json.getJSONArray("layers")
+                    val layer = json.getJSONArray("layers")
                         .getJSONObject(0)
-                        .getString("digest")
-                        .removePrefix("sha256:")
+                        
+                    return@coroutineScope Pair(
+                        layer.getString("digest").removePrefix("sha256:"),
+                        layer.getLong("size")
+                    )
                 }
             } catch (e: Exception) {
                 // Ignore and try next tag
@@ -64,27 +75,28 @@ class OllamaDownloader {
      * Downloads an LLM model chunk by chunk from Ollama's registry into the given output directory.
      * @param modelName The registry namespace (e.g. "llama3.2" or "phi3")
      * @param digest The SHA256 of the model layer.
+     * @param totalSize The total size of the chunk extracted from the registry.
      * @param outputDir The Directory to save the final .gguf file.
      * @param filename What you want the output file named.
      */
-    suspend fun download(modelName: String, digest: String, outputDir: String, filename: String): File = coroutineScope {
+    suspend fun download(modelName: String, digest: String, totalSize: Long, outputDir: String, filename: String): File = coroutineScope {
         val blob = BlobDownload(
             digest = digest,
-            name = "$outputDir/$filename"
+            name = "$outputDir/$filename",
+            total = totalSize
         )
         
         // Ensure outputDir exists
         File(outputDir).mkdirs()
-
-        // STEP 1: HEAD gets total size
-        blob.total = headRequest("https://registry.ollama.ai/v2/library/$modelName/blobs/sha256:$digest")
 
         // STEP 2: Slice into 16 parts 
         val partSize = (blob.total / 16).coerceIn(100*1024*1024, 1000*1024*1024)
         repeat(16) { i ->
             val offset = i * partSize
             val size = minOf(partSize, blob.total - offset)
-            blob.parts.add(BlobDownloadPart(i, offset, size))
+            if (size > 0) {
+                blob.parts.add(BlobDownloadPart(i, offset, size))
+            }
         }
 
         // STEP 3: PARALLEL DOWNLOAD
@@ -94,7 +106,7 @@ class OllamaDownloader {
 
         blob.parts.forEach { part ->
             launch(Dispatchers.IO) {
-                downloadPart(modelName, file, part, digest)
+                downloadPart(modelName, file, part, digest, blob)
             }
         }
 
@@ -103,14 +115,9 @@ class OllamaDownloader {
         File(blob.name)
     }
 
-    private suspend fun headRequest(url: String): Long {
-        val req = Request.Builder().head().url(url).build()
-        return client.newCall(req).execute().use { 
-            it.body?.contentLength() ?: 0 
-        }
-    }
 
-    private suspend fun downloadPart(modelName: String, file: File, part: BlobDownloadPart, digest: String) {
+
+    private suspend fun downloadPart(modelName: String, file: File, part: BlobDownloadPart, digest: String, blob: BlobDownload) {
         val url = "https://registry.ollama.ai/v2/library/$modelName/blobs/sha256:$digest"
         val req = Request.Builder()
             .url(url)
@@ -125,10 +132,22 @@ class OllamaDownloader {
                     var bytesRead: Int
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                         raf.write(buffer, 0, bytesRead)
+                        part.completed += bytesRead
+                        
+                        // Output total progress dynamically every ~10MB to avoid logcat spam
+                        if (System.currentTimeMillis() - part.lastUpdated > 2000) {
+                             part.lastUpdated = System.currentTimeMillis()
+                             val sumCompleted = blob.parts.sumOf { it.completed }
+                             val percent = (sumCompleted.toDouble() / blob.total * 100).toInt()
+                             val mbDownloaded = sumCompleted / 1_000_000
+                             val mbTotal = blob.total / 1_000_000
+                             val logStr = "Downloading $modelName: $mbDownloaded / $mbTotal MB ($percent%)"
+                             Log.d("OllamaDownloader", logStr)
+                             _downloadProgress.value = logStr
+                        }
                     }
                 }
             }
         }
-        part.completed = part.size
     }
 }

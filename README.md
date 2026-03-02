@@ -21,17 +21,35 @@ A baseline Android project designed to easily get up and running, running a loca
    sdk.dir=/path/to/your/Android/Sdk
    ```
 
-3. **Open in Android Studio:**
+3. **Enable USB Debugging on Your Android Device:**
+   To deploy the app directly to your phone using `./gradlew installDebug`, ensure your device is prepared:
+   - Go to your device's **Settings > About Phone**.
+   - Tap **Build Number** 7 times to unlock Developer Options.
+   - Navigate back to **Settings > System > Developer Options**.
+   - Toggle **USB Debugging** ON.
+   - Connect your phone to your computer via USB. Wait for the prompt on your phone and tap **"Allow USB debugging"**.
+
+4. **Open in Android Studio (Optional):**
    - Launch Android Studio
    - Select "Open" and navigate to the cloned `lemon` folder
    - Wait for Gradle Sync to complete
 
-4. **Build and Run:**
-   - Either use Android Studio's **Run** button (green play arrow)
-   - Or, build via command line:
+5. **Build and Run:**
+   - To build and install the debug APK directly to your connected device from the command line:
      ```bash
      ./gradlew assembleDebug
+     ./gradlew installDebug
      ```
+   - Alternatively, you can use Android Studio's **Run** button (green play arrow).
+
+## Test the Inference Engine
+
+You can test out the live logic without manual GGUF configuration:
+1. Make sure your phone/emulator is connected to WiFi.
+2. Open the App and Open the Dropdown on the top-right to click **Download Models**.
+3. Choose a verified model from the dynamic Ollama Dropdown UI (e.g. `llama3.2:1b`) and tap Pull.
+4. Check your Android device's `Logcat` interface to view chunk downloads completing in real-time.
+5. Exit the popup, pick the model from the model-switcher dropdown and begin chatting!
 
 ## Contributing
 When contributing, ensure you format code based on Kotlin official style guide. Ensure your branch passes the standard `./gradlew assembleDebug` check.

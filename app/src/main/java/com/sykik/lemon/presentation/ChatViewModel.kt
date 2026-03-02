@@ -13,12 +13,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+import com.sykik.lemon.data.engine.OllamaScrapedModel
+import com.sykik.lemon.data.engine.OllamaModelLister
+
 data class ChatState(
     val messages: List<ChatMessage> = emptyList(),
     val isGenerating: Boolean = false,
     val availableModels: List<LlmModel> = listOf(
         LlmModel("mock-1", "Mock Model (Local Testing)", isDownloaded = true)
     ),
+    val remoteModels: List<OllamaScrapedModel> = emptyList(),
     val selectedModel: LlmModel? = null,
     val isModelDownloadPopupVisible: Boolean = false,
     val isDownloadingModel: Boolean = false,
@@ -34,11 +38,29 @@ class ChatViewModel(
     val uiState: StateFlow<ChatState> = _uiState.asStateFlow()
 
     private val downloader = OllamaDownloader()
+    private val modelLister = OllamaModelLister()
 
     init {
         // Auto-select first available downloaded model
         _uiState.value.availableModels.firstOrNull { it.isDownloaded }?.let { 
             selectModel(it)
+        }
+        
+        viewModelScope.launch {
+            downloader.downloadProgress.collect { progressText ->
+                if (_uiState.value.isDownloadingModel && progressText.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(downloadStatusText = progressText)
+                }
+            }
+        }
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val scraped = modelLister.getAllModels()
+                _uiState.value = _uiState.value.copy(remoteModels = scraped)
+            } catch (e: Exception) {
+                // Ignore missing models fallback
+            }
         }
     }
 
@@ -57,16 +79,16 @@ class ChatViewModel(
             )
             
             try {
-                // 1. Resolve Digest from Ollama registry (using user parallel implementation)
-                val digest = downloader.resolveDigest(name, tag)
+                // 1. Resolve Digest and Size from Ollama registry 
+                val (digest, size) = downloader.resolveDigest(name, tag)
 
                 _uiState.value = _uiState.value.copy(
-                    downloadStatusText = "Downloading $name:$tag via parallel OkHttp chunks..."
+                    downloadStatusText = "Downloading $name:$tag via parallel chunks (${size / 1_000_000} MB)..."
                 )
 
                 // 2. Download Model
                 val filename = "${name.replace("/", "_")}-$tag.gguf"
-                val file = downloader.download(name, digest, outputDir, filename)
+                val file = downloader.download(name, digest, size, outputDir, filename)
                 
                 // Add downloaded model to state
                 val newModel = LlmModel(

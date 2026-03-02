@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
                         ModelDownloadPopup(
                             isDownloading = state.isDownloadingModel,
                             statusText = state.downloadStatusText,
+                            remoteModels = state.remoteModels,
                             onDownloadModel = { modelName ->
                                 val outputDir = getExternalFilesDir(null)?.absolutePath ?: filesDir.absolutePath
                                 viewModel.downloadModel(modelName, outputDir)
