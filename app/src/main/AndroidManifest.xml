@@ -4,10 +4,10 @@
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.Lemon">
+        android:supportsRtl="true">
         <activity
             android:name=".MainActivity"
+            android:theme="@android:style/Theme.NoTitleBar"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

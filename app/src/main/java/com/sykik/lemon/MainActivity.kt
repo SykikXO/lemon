@@ -1,11 +1,57 @@
 package com.sykik.lemon
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
 
-class MainActivity : AppCompatActivity() {
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sykik.lemon.data.engine.MockLlmEngine
+import com.sykik.lemon.presentation.ChatViewModel
+import com.sykik.lemon.presentation.ui.ChatScreen
+import com.sykik.lemon.presentation.ui.ModelDownloadPopup
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContent {
+            MaterialTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    // Temporary factory until Dependency Injection (like Hilt) is added
+                    val factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return ChatViewModel(MockLlmEngine()) as T
+                        }
+                    }
+                    
+                    val viewModel: ChatViewModel = viewModel(factory = factory)
+                    val state by viewModel.uiState.collectAsState()
+
+                    ChatScreen(
+                        state = state,
+                        onSendMessage = viewModel::sendMessage,
+                        onModelSelected = viewModel::selectModel,
+                        onManageModelsClicked = viewModel::toggleModelDownloadPopup
+                    )
+
+                    if (state.isModelDownloadPopupVisible) {
+                        ModelDownloadPopup(
+                            onDismiss = viewModel::toggleModelDownloadPopup
+                        )
+                    }
+                }
+            }
+        }
     }
 }
