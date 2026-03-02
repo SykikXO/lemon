@@ -26,15 +26,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // Temporary factory until Dependency Injection (like Hilt) is added
-            val factory = object : ViewModelProvider.Factory {
-                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return ChatViewModel(LlamaCppEngineImpl(this@MainActivity.applicationContext)) as T
-                }
-            }
-            
-            val viewModel: ChatViewModel = viewModel(factory = factory)
-            val state by viewModel.uiState.collectAsState()
+            MaterialTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    // Temporary factory until Dependency Injection (like Hilt) is added
+                    val factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return ChatViewModel(LlamaCppEngineImpl(this@MainActivity.applicationContext)) as T
+                        }
+                    }
+                    
+                    val viewModel: ChatViewModel = viewModel(factory = factory)
+                    val state by viewModel.uiState.collectAsState()
 
             MaterialTheme(
                 colorScheme = if (state.isDarkMode) darkColorScheme() else lightColorScheme()
@@ -47,8 +52,7 @@ class MainActivity : ComponentActivity() {
                         state = state,
                         onSendMessage = viewModel::sendMessage,
                         onModelSelected = viewModel::selectModel,
-                        onManageModelsClicked = viewModel::toggleModelDownloadPopup,
-                        onThemeToggleClicked = viewModel::toggleDarkMode
+                        onManageModelsClicked = viewModel::toggleModelDownloadPopup
                     )
 
                     if (state.isModelDownloadPopupVisible) {

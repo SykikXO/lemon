@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "lemon"
 include(":app")
+include(":llamaCpp")
+project(":llamaCpp").projectDir = file("kotlinllamacpp/llamaCpp")
